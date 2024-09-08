@@ -128,22 +128,26 @@ def save_translation(user_id, source_text, translated_text, source_language, tar
         db.commit()
 
 def translate_text(text, source_language, target_language):
-    translation_prompt = f"Translate the following {source_language} text to {target_language}, providing a natural and accurate translation that captures the nuance and context: '{text}'"
+    translation_prompt = f"Translate the following {source_language} text to {target_language}, providing only the direct translation without any explanation or additional context: '{text}'"
     translation_response = client.chat.completions.create(
         model="gpt-4",
         messages=[
-        {"role": "system", "content": "You are a professional translator specializing in nuanced and contextually accurate translations between English and Korean. (Do not include quotation marks in the translation result, for example, output hello instead of ''hello'')"},
+            {"role": "system", "content": "You are a professional translator. Provide only the direct translation without any additional explanation or context.Do not use quotation marks."},
             {"role": "user", "content": translation_prompt}
         ]
     )
     return translation_response.choices[0].message.content.strip()
 
-def interpret_text(text, source_language, target_language):
-    interpretation_prompt = f"Please explain the nuance of the following {'Korean' if target_language == 'Korean' else source_language} sentence in English: '{text}'. Focus on explaining the cultural context, level of formality, and any implied meanings that might not be obvious to non-native speakers."
+def interpret_text(text, language):
+    if language == 'Korean':
+        interpretation_prompt = f"다음 한국어 문장의 뉘앙스를 설명해주세요: '{text}'. 문화적 맥락, 격식의 정도, 그리고 비원어민에게는 명확하지 않을 수 있는 함축적 의미에 초점을 맞춰 설명해주세요. 영어로 간단히 설명해주세요."
+    else:
+        interpretation_prompt = f"Explain the nuance of the following Korean sentence: '{text}'. Focus on cultural context, level of formality, and implied meanings that might not be obvious to non-native speakers. Please explain briefly in English."
+    
     interpretation_response = client.chat.completions.create(
         model="gpt-4",
         messages=[
-            {"role": "system", "content": "You are an expert in explaining the nuances of sentences in various languages, especially Korean and English."},
+            {"role": "system", "content": "당신은 한국어와 영어의 뉘앙스를 설명하는 전문가입니다. 간단히 설명해주세요."},
             {"role": "user", "content": interpretation_prompt}
         ]
     )
@@ -152,7 +156,7 @@ def interpret_text(text, source_language, target_language):
 @app.route('/translate', methods=['POST'])
 def translate():
     if 'user_id' not in session:
-        return jsonify({'error': 'User not authenticated'}), 401
+        return jsonify({'error': '사용자 인증이 필요합니다.'}), 401
     
     try:
         data = request.json
@@ -163,15 +167,18 @@ def translate():
 
         def generate():
             with ThreadPoolExecutor(max_workers=2) as executor:
-                yield json.dumps({'status': 'translating'}) + '\n'
                 translation_future = executor.submit(translate_text, text, source_language, target_language)
                 
                 translation = translation_future.result()
                 yield json.dumps({'status': 'translation_complete', 'translation': translation}) + '\n'
                 
-                yield json.dumps({'status': 'interpreting'}) + '\n'
-                interpretation_future = executor.submit(interpret_text, translation if target_language == 'Korean' else text, source_language, target_language)
+                # 한국어 문장의 뉘앙스를 설명
+                if source_language == 'Korean':
+                    interpretation_text = text
+                else:
+                    interpretation_text = translation
                 
+                interpretation_future = executor.submit(interpret_text, interpretation_text, 'Korean')
                 interpretation = interpretation_future.result()
                 yield json.dumps({'status': 'interpretation_complete', 'interpretation': interpretation}) + '\n'
 
@@ -181,9 +188,9 @@ def translate():
         return app.response_class(generate(), mimetype='application/json')
 
     except Exception as e:
-        app.logger.error(f"Translation error: {str(e)}")
+        app.logger.error(f"번역 오류: {str(e)}")
         app.logger.error(traceback.format_exc())
-        return jsonify({'error': 'An error occurred during translation.'}), 500
+        return jsonify({'error': '번역 중 오류가 발생했습니다.'}), 500
 
 @app.route('/get_translations', methods=['GET'])
 def get_translations():

@@ -130,7 +130,7 @@ def save_translation(user_id, source_text, translated_text, source_language, tar
 def translate_text(text, source_language, target_language):
     translation_prompt = f"Translate the following {source_language} text to {target_language}, providing only the direct translation without any explanation or additional context: '{text}'"
     translation_response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are a professional translator. Provide only the direct translation without any additional explanation or context.Do not use quotation marks."},
             {"role": "user", "content": translation_prompt}
@@ -145,7 +145,7 @@ def interpret_text(text, language):
         interpretation_prompt = f"Explain the nuance of the following Korean sentence: '{text}'. Focus on cultural context, level of formality, and implied meanings that might not be obvious to non-native speakers. Please explain briefly in English."
     
     interpretation_response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": "당신은 한국어와 영어의 뉘앙스를 설명하는 전문가입니다. 간단히 설명해주세요."},
             {"role": "user", "content": interpretation_prompt}
